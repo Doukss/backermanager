@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kermanager-postgres
+    environment:
+      POSTGRES_DB: kermanager
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: passer0412
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d kermanager"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: kermanager-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: jdbc:postgresql://postgres:5432/kermanager
+      DB_USER: postgres
+      DB_PASS: passer0412
+      JWT_SECRET: defaultSecretForDevOnly32Chars!!
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
