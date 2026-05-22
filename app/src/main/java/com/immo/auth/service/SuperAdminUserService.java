@@ -20,7 +20,7 @@ public class SuperAdminUserService {
     private final PasswordEncoder passwordEncoder;
 
     public List<SuperAdminUserResponse> listPlatformUsers() {
-        return userRepository.findByRoleIn(List.of(Role.ADMIN_AGENCE, Role.AGENT, Role.SECRETAIRE))
+        return userRepository.findByRoleIn(List.of(Role.ADMIN_AGENCE, Role.AGENT, Role.SECRETAIRE, Role.LOCATAIRE))
                 .stream()
                 .map(this::toResponse)
                 .toList();

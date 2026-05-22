@@ -46,6 +46,7 @@ public class AuthConfig {
                                 "/docs",
                                 "/swagger",
                                 "/auth/login",
+                                "/auth/register",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
@@ -75,7 +76,7 @@ public class AuthConfig {
                 HttpMethod.PUT.name(),
                 HttpMethod.DELETE.name(),
                 HttpMethod.OPTIONS.name()));
-        configuration.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE));
+        configuration.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, "X-Tenant-ID"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -7,5 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AgencyRepository extends JpaRepository<Agency, UUID> {
     Optional<Agency> findByTenantId(String tenantId);
+    boolean existsByTenantId(String tenantId);
     long countByActive(boolean active);
 }

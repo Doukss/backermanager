@@ -1,11 +1,13 @@
 package com.immo.auth.controller;
 import com.immo.auth.dto.LoginRequest;
 import com.immo.auth.dto.LoginResponse;
+import com.immo.auth.dto.RegisterAgencyRequest;
 import com.immo.auth.service.AuthService;
 import com.immo.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +22,12 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(@RequestBody LoginRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(authService.login(req)));
+    }
+
+    @Operation(summary = "Inscription agence", description = "Cree une agence active, un compte ADMIN_AGENCE et un abonnement PRO par defaut.")
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponse<LoginResponse>> register(@Valid @RequestBody RegisterAgencyRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(authService.registerAgency(req)));
     }
 
     @Operation(summary = "Renouveler le token")

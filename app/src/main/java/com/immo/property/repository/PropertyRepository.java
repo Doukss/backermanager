@@ -8,5 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PropertyRepository extends JpaRepository<Property, UUID> {
     List<Property> findByTenantIdOrderByTitreAsc(String tenantId);
+    List<Property> findByTenantIdAndDisponibleTrueOrderByTitreAsc(String tenantId);
     Optional<Property> findByTenantIdAndId(String tenantId, UUID id);
 }
