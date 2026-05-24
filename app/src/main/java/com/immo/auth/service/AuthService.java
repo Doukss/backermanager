@@ -25,8 +25,11 @@ public class AuthService {
         User user = userRepository.findByEmailIgnoreCase(request.getEmail())
                 .orElseThrow(() -> new UnauthorizedException("Identifiants invalides"));
 
-        if (!user.isActive() || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new UnauthorizedException("Identifiants invalides");
+        }
+        if (!user.isActive()) {
+            throw new UnauthorizedException("Votre compte est suspendu. Contactez le super-admin.");
         }
 
         return LoginResponse.builder()
@@ -39,6 +42,11 @@ public class AuthService {
     public LoginResponse refresh(String authorization) {
         String token = authorization.replace("Bearer ", "");
         var claims = jwtUtil.parse(token);
+        User user = userRepository.findById(java.util.UUID.fromString(claims.getSubject()))
+                .orElseThrow(() -> new UnauthorizedException("Utilisateur introuvable"));
+        if (!user.isActive()) {
+            throw new UnauthorizedException("Votre compte est suspendu. Contactez le super-admin.");
+        }
         return LoginResponse.builder()
                 .accessToken(jwtUtil.generate(claims.getSubject(), claims.get("tenantId", String.class), claims.get("role", String.class)))
                 .tokenType("Bearer")

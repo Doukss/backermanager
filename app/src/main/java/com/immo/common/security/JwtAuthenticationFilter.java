@@ -1,5 +1,6 @@
 package com.immo.common.security;
 
+import com.immo.auth.repository.UserRepository;
 import com.immo.common.util.JwtUtil;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
@@ -14,6 +15,7 @@ import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -26,9 +28,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER = "Bearer ";
 
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserRepository userRepository) {
         this.jwtUtil = jwtUtil;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -46,6 +50,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String userId = claims.getSubject();
             String tenantId = claims.get("tenantId", String.class);
             String role = claims.get("role", String.class);
+
+            boolean active = userRepository.findById(UUID.fromString(userId))
+                    .map(user -> user.isActive())
+                    .orElse(false);
+            if (!active) {
+                SecurityContextHolder.clearContext();
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Utilisateur suspendu");
+                return;
+            }
 
             var authority = new SimpleGrantedAuthority("ROLE_" + role);
             var authentication = new UsernamePasswordAuthenticationToken(userId, null, List.of(authority));
