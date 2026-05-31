@@ -3,7 +3,9 @@ package com.immo.agency.service;
 import com.immo.agency.dto.*;
 import com.immo.agency.entity.Agency;
 import com.immo.agency.repository.AgencyRepository;
+import com.immo.common.dto.GeneratedDocument;
 import com.immo.common.exception.ResourceNotFoundException;
+import com.immo.common.service.PdfDocumentService;
 import com.immo.dispute.entity.Dispute;
 import com.immo.dispute.entity.enums.DisputeStatus;
 import com.immo.dispute.repository.DisputeRepository;
@@ -36,6 +38,7 @@ public class AgencyWorkspaceService {
     private final ContractRepository contractRepository;
     private final PaymentRepository paymentRepository;
     private final DisputeRepository disputeRepository;
+    private final PdfDocumentService pdfDocumentService;
 
     public List<AgencyPropertyResponse> listProperties(String tenantId) {
         requireTenant(tenantId);
@@ -201,6 +204,43 @@ public class AgencyWorkspaceService {
                 .filter(payment -> payment.getStatut() == PaymentStatus.PAYE)
                 .map(payment -> toReceiptResponse(payment, contractsById, propertiesById))
                 .toList();
+    }
+
+    public GeneratedDocument contractPdf(String tenantId, UUID contractId) {
+        Contract contract = findContract(tenantId, contractId);
+        Map<UUID, Property> propertiesById = propertiesByTenant(tenantId);
+        String propertyTitle = propertyName(contract.getPropertyId(), propertiesById);
+        byte[] content = pdfDocumentService.contractPdf(
+                agencyName(tenantId),
+                propertyTitle,
+                contract.getLocataireNom(),
+                contract.getLocataireEmail(),
+                contract.getDateDebut(),
+                contract.getDateFin(),
+                money(contract.getLoyerMensuel()),
+                money(contract.getDepot()),
+                contract.getStatut() == null ? "-" : contract.getStatut().name());
+        return new GeneratedDocument(filename("contrat", contract.getLocataireNom(), contract.getId()), content);
+    }
+
+    public GeneratedDocument receiptPdf(String tenantId, UUID paymentId) {
+        Payment payment = findPayment(tenantId, paymentId);
+        if (payment.getStatut() != PaymentStatus.PAYE) {
+            throw new IllegalArgumentException("La quittance est disponible uniquement pour un paiement paye");
+        }
+        Map<UUID, Contract> contractsById = contractsByTenant(tenantId);
+        Map<UUID, Property> propertiesById = propertiesByTenant(tenantId);
+        Contract contract = contractsById.get(payment.getContractId());
+        LocalDate issuedAt = payment.getDatePaiement() == null ? payment.getDateEcheance() : payment.getDatePaiement();
+        byte[] content = pdfDocumentService.receiptPdf(
+                agencyName(tenantId),
+                contract == null ? "-" : propertyName(contract.getPropertyId(), propertiesById),
+                contract == null ? "-" : contract.getLocataireNom(),
+                issuedAt.getMonth().getDisplayName(TextStyle.FULL, Locale.FRENCH) + " " + issuedAt.getYear(),
+                money(payment.getMontant()),
+                issuedAt,
+                payment.getReference());
+        return new GeneratedDocument(filename("quittance", contract == null ? "locataire" : contract.getLocataireNom(), payment.getId()), content);
     }
 
     public List<AgencyDisputeResponse> listDisputes(String tenantId) {
@@ -411,6 +451,26 @@ public class AgencyWorkspaceService {
             return address;
         }
         return address + ", " + city;
+    }
+
+    private String agencyName(String tenantId) {
+        return agencyRepository.findByTenantId(tenantId)
+                .map(Agency::getNom)
+                .orElse(tenantId);
+    }
+
+    private String money(BigDecimal amount) {
+        return amount == null ? "-" : amount.stripTrailingZeros().toPlainString() + " XOF";
+    }
+
+    private String filename(String prefix, String name, UUID id) {
+        String cleanName = name == null ? "document" : name.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-|-$)", "");
+        if (cleanName.isBlank()) {
+            cleanName = "document";
+        }
+        return prefix + "-" + cleanName + "-" + id + ".pdf";
     }
 
     private void requireTenant(String tenantId) {

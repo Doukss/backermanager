@@ -3,6 +3,7 @@ package com.immo.agency.controller;
 import com.immo.agency.dto.*;
 import com.immo.agency.service.AgencyWorkspaceService;
 import com.immo.common.dto.ApiResponse;
+import com.immo.common.dto.GeneratedDocument;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -12,7 +13,9 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -114,6 +117,12 @@ public class AgencyWorkspaceController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
+    @Operation(summary = "Telecharger le PDF d'un contrat")
+    @GetMapping("/contracts/{id}/pdf")
+    public ResponseEntity<byte[]> contractPdf(@TenantHeaderDoc @RequestHeader("X-Tenant-ID") String tenantId, @PathVariable UUID id) {
+        return pdfResponse(service.contractPdf(tenantId, id));
+    }
+
     @Operation(summary = "Lister les paiements")
     @GetMapping("/payments")
     public ResponseEntity<ApiResponse<List<AgencyPaymentResponse>>> listPayments(@TenantHeaderDoc @RequestHeader("X-Tenant-ID") String tenantId) {
@@ -160,6 +169,12 @@ public class AgencyWorkspaceController {
     @GetMapping("/receipts")
     public ResponseEntity<ApiResponse<List<AgencyReceiptResponse>>> listReceipts(@TenantHeaderDoc @RequestHeader("X-Tenant-ID") String tenantId) {
         return ResponseEntity.ok(ApiResponse.ok(service.listReceipts(tenantId)));
+    }
+
+    @Operation(summary = "Telecharger le PDF d'une quittance")
+    @GetMapping("/receipts/{paymentId}/pdf")
+    public ResponseEntity<byte[]> receiptPdf(@TenantHeaderDoc @RequestHeader("X-Tenant-ID") String tenantId, @PathVariable UUID paymentId) {
+        return pdfResponse(service.receiptPdf(tenantId, paymentId));
     }
 
     @Operation(summary = "Lister les litiges")
@@ -210,5 +225,12 @@ public class AgencyWorkspaceController {
 
     @Parameter(name = "X-Tenant-ID", description = "Identifiant tenant de l'agence courante", required = true)
     private @interface TenantHeaderDoc {
+    }
+
+    private ResponseEntity<byte[]> pdfResponse(GeneratedDocument document) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + document.filename() + "\"")
+                .body(document.content());
     }
 }

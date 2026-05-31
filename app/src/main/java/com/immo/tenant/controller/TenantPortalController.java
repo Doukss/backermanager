@@ -2,6 +2,7 @@ package com.immo.tenant.controller;
 
 import com.immo.agency.dto.AgencyDashboardData;
 import com.immo.common.dto.ApiResponse;
+import com.immo.common.dto.GeneratedDocument;
 import com.immo.tenant.dto.TenantContactRequest;
 import com.immo.tenant.dto.TenantPasswordRequest;
 import com.immo.tenant.dto.TenantProfileRequest;
@@ -12,6 +13,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -62,5 +65,28 @@ public class TenantPortalController {
             @RequestHeader("X-User-Id") String userId,
             @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(service.pay(userId, id)));
+    }
+
+    @Operation(summary = "Telecharger le PDF d'un contrat locataire")
+    @GetMapping("/contracts/{id}/pdf")
+    public ResponseEntity<byte[]> contractPdf(
+            @RequestHeader("X-User-Id") String userId,
+            @PathVariable UUID id) {
+        return pdfResponse(service.contractPdf(userId, id));
+    }
+
+    @Operation(summary = "Telecharger le PDF d'une quittance locataire")
+    @GetMapping("/receipts/{paymentId}/pdf")
+    public ResponseEntity<byte[]> receiptPdf(
+            @RequestHeader("X-User-Id") String userId,
+            @PathVariable UUID paymentId) {
+        return pdfResponse(service.receiptPdf(userId, paymentId));
+    }
+
+    private ResponseEntity<byte[]> pdfResponse(GeneratedDocument document) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + document.filename() + "\"")
+                .body(document.content());
     }
 }

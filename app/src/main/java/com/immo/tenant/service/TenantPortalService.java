@@ -1,10 +1,14 @@
 package com.immo.tenant.service;
 
 import com.immo.agency.dto.AgencyDashboardData;
+import com.immo.agency.entity.Agency;
+import com.immo.agency.repository.AgencyRepository;
 import com.immo.auth.entity.User;
 import com.immo.auth.repository.UserRepository;
+import com.immo.common.dto.GeneratedDocument;
 import com.immo.common.exception.ResourceNotFoundException;
 import com.immo.common.exception.UnauthorizedException;
+import com.immo.common.service.PdfDocumentService;
 import com.immo.dispute.entity.Dispute;
 import com.immo.dispute.entity.enums.DisputeStatus;
 import com.immo.dispute.repository.DisputeRepository;
@@ -39,11 +43,13 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TenantPortalService {
     private final UserRepository userRepository;
+    private final AgencyRepository agencyRepository;
     private final PropertyRepository propertyRepository;
     private final ContractRepository contractRepository;
     private final PaymentRepository paymentRepository;
     private final DisputeRepository disputeRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PdfDocumentService pdfDocumentService;
 
     public AgencyDashboardData dashboard(UUID userId) {
         User user = findUser(userId);
@@ -152,9 +158,58 @@ public class TenantPortalService {
         return toPayment(saved, contracts, properties);
     }
 
+    public GeneratedDocument contractPdf(String userId, UUID contractId) {
+        User user = findUser(UUID.fromString(userId));
+        Contract contract = ownedContract(user, contractId);
+        Map<UUID, Property> properties = propertyRepository.findByTenantIdOrderByTitreAsc(user.getTenantId()).stream()
+                .collect(Collectors.toMap(Property::getId, Function.identity()));
+        byte[] content = pdfDocumentService.contractPdf(
+                agencyName(user.getTenantId()),
+                propertyName(contract.getPropertyId(), properties),
+                contract.getLocataireNom(),
+                contract.getLocataireEmail(),
+                contract.getDateDebut(),
+                contract.getDateFin(),
+                money(contract.getLoyerMensuel()),
+                money(contract.getDepot()),
+                contract.getStatut() == null ? "-" : contract.getStatut().name());
+        return new GeneratedDocument(filename("contrat", contract.getLocataireNom(), contract.getId()), content);
+    }
+
+    public GeneratedDocument receiptPdf(String userId, UUID paymentId) {
+        User user = findUser(UUID.fromString(userId));
+        Payment payment = paymentRepository.findByTenantIdAndId(user.getTenantId(), paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Paiement introuvable"));
+        Contract contract = ownedContract(user, payment.getContractId());
+        if (payment.getStatut() != PaymentStatus.PAYE) {
+            throw new IllegalArgumentException("La quittance est disponible uniquement pour un paiement paye");
+        }
+        Map<UUID, Property> properties = propertyRepository.findByTenantIdOrderByTitreAsc(user.getTenantId()).stream()
+                .collect(Collectors.toMap(Property::getId, Function.identity()));
+        LocalDate issuedAt = payment.getDatePaiement() == null ? payment.getDateEcheance() : payment.getDatePaiement();
+        byte[] content = pdfDocumentService.receiptPdf(
+                agencyName(user.getTenantId()),
+                propertyName(contract.getPropertyId(), properties),
+                contract.getLocataireNom(),
+                issuedAt.getMonth().getDisplayName(TextStyle.FULL, Locale.FRENCH) + " " + issuedAt.getYear(),
+                money(payment.getMontant()),
+                issuedAt,
+                payment.getReference());
+        return new GeneratedDocument(filename("quittance", contract.getLocataireNom(), payment.getId()), content);
+    }
+
     private User findUser(UUID userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable"));
+    }
+
+    private Contract ownedContract(User user, UUID contractId) {
+        Contract contract = contractRepository.findByTenantIdAndId(user.getTenantId(), contractId)
+                .orElseThrow(() -> new ResourceNotFoundException("Contrat introuvable"));
+        if (!user.getEmail().equalsIgnoreCase(nullToBlank(contract.getLocataireEmail()))) {
+            throw new UnauthorizedException("Document non autorise");
+        }
+        return contract;
     }
 
     private AgencyDashboardData.AgencyPropertyItem toProperty(Property property) {
@@ -256,6 +311,26 @@ public class TenantPortalService {
         if (address == null || address.isBlank()) return city == null ? "" : city;
         if (city == null || city.isBlank()) return address;
         return address + ", " + city;
+    }
+
+    private String agencyName(String tenantId) {
+        return agencyRepository.findByTenantId(tenantId)
+                .map(Agency::getNom)
+                .orElse(tenantId);
+    }
+
+    private String money(BigDecimal amount) {
+        return amount == null ? "-" : amount.stripTrailingZeros().toPlainString() + " XOF";
+    }
+
+    private String filename(String prefix, String name, UUID id) {
+        String cleanName = name == null ? "document" : name.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-|-$)", "");
+        if (cleanName.isBlank()) {
+            cleanName = "document";
+        }
+        return prefix + "-" + cleanName + "-" + id + ".pdf";
     }
 
     private String nullToBlank(String value) {
